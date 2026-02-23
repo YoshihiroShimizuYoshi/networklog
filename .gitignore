@@ -1,0 +1,7 @@
+venv/
+logs/
+__pycache__/
+*.pyc
+*.pyo
+alerts.log
+network_log.txt
