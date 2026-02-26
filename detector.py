@@ -68,13 +68,13 @@ def send_alert(message):
 
 
 def run(source="dir", contamination=0.1):
-    """解析・異常検知を実行"""
+    """解析・異常検知を実行。異常リストとベースラインを返す"""
     print("🔍 ログ読み込み中...")
     records = parse_logs_dir(LOG_DIR) if source == "dir" else parse_log(source)
 
     if not records:
         print("⚠️  解析できるレコードがありません")
-        return
+        return {"anomalies": [], "baseline": {}}
 
     print(f"📊 {len(records)} 件のレコードを読み込みました")
     print("🤖 特徴量抽出中...")
@@ -82,7 +82,7 @@ def run(source="dir", contamination=0.1):
 
     if len(features) < 2:
         print("⚠️  データが少なすぎます（最低2つの時間窓が必要）")
-        return
+        return {"anomalies": [], "baseline": {}}
 
     print(f"🧠 Isolation Forestで異常検知中... ({len(features)} 時間窓, contamination={contamination})")
     labels, scores = detect_anomalies(features, contamination)
@@ -90,6 +90,15 @@ def run(source="dir", contamination=0.1):
     anomaly_count = sum(1 for l in labels if l == -1)
     print(f"\n📈 結果: {anomaly_count}/{len(features)} 時間窓で異常を検出\n")
 
+    # 正常時間窓の平均をベースラインとして計算
+    normal_features = features[labels == 1]
+    baseline = {
+        "avg_pkt":   float(normal_features[:, 0].mean()) if len(normal_features) else 0,
+        "avg_ports": float(normal_features[:, 3].mean()) if len(normal_features) else 0,
+        "avg_susp":  float(normal_features[:, 4].mean()) if len(normal_features) else 0,
+    }
+
+    anomalies = []
     for i, (label, score) in enumerate(zip(labels, scores)):
         if label == -1:
             bucket = buckets[i]
@@ -101,9 +110,16 @@ def run(source="dir", contamination=0.1):
                    f"送信元IP:{int(src)}, 宛先IP:{int(dst)}, "
                    f"ポート種類:{int(ports)}, 不審率:{susp:.1%} (score:{score:.3f})")
             send_alert(msg)
+            anomalies.append({
+                "time": time_str, "pkt": int(pkt), "src": int(src),
+                "dst": int(dst), "ports": int(ports),
+                "susp": float(susp), "score": float(score)
+            })
 
     if anomaly_count == 0:
         print("  ✅ 異常は検出されませんでした")
+
+    return {"anomalies": anomalies, "baseline": baseline}
 
 
 if __name__ == "__main__":
@@ -115,5 +131,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     source = args.file if args.file else "dir"
-    run(source=source, contamination=args.contamination)
+    result = run(source=source, contamination=args.contamination)
+
+    if result and result["anomalies"]:
+        from llm_analyzer import analyze as llm_analyze
+        llm_analyze(result["anomalies"], result["baseline"])
+
     print("\n✅ 完了")

@@ -3,6 +3,7 @@ from datetime import datetime
 
 from collector import collect, ensure_dir
 from detector import run as detect
+from llm_analyzer import analyze as llm_analyze
 
 CONTAMINATION = 0.1
 
@@ -22,7 +23,11 @@ if __name__ == "__main__":
             filename = collect()
 
             log(f"🤖 異常検知開始: {filename}")
-            detect(source=filename, contamination=CONTAMINATION)
+            result = detect(source=filename, contamination=CONTAMINATION)
+
+            if result and result["anomalies"]:
+                log("💬 Claude による分析中...")
+                llm_analyze(result["anomalies"], result["baseline"])
 
         except KeyboardInterrupt:
             log("🛑 監視を停止しました")
