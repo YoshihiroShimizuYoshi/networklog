@@ -49,7 +49,7 @@ def analyze(anomalies, baseline):
     client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
         model=MODEL,
-        max_tokens=512,
+        max_tokens=2048,
         messages=[{"role": "user", "content": prompt}]
     )
     result = message.content[0].text
