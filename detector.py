@@ -135,6 +135,11 @@ if __name__ == "__main__":
 
     if result and result["anomalies"]:
         from llm_analyzer import analyze as llm_analyze
-        llm_analyze(result["anomalies"], result["baseline"])
+        from es_client import index_alert, index_analysis
+        analysis_text = llm_analyze(result["anomalies"], result["baseline"])
+        for anomaly in result["anomalies"]:
+            index_alert(anomaly)
+        if analysis_text:
+            index_analysis(analysis_text, result["anomalies"])
 
     print("\n✅ 完了")
